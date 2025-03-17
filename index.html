@@ -8,23 +8,49 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <style>
-        body { text-align: center; font-family: Arial, sans-serif; }
+        body { text-align: center; font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        .container { position: relative; width: 100%; height: 100vh; }
         video, canvas { position: absolute; left: 50%; transform: translateX(-50%); top: 10%; }
         #warning { position: absolute; top: 5%; left: 50%; transform: translateX(-50%); color: red; font-size: 24px; font-weight: bold; }
+        #stats { position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%); background-color: rgba(0,0,0,0.5); color: white; padding: 10px 20px; border-radius: 10px; }
+        #reset { position: absolute; bottom: 2%; left: 50%; transform: translateX(-50%); padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #reset:hover { background-color: #45a049; }
     </style>
 </head>
 <body>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-    <div id="warning"></div>
-    <audio id="audio" src="elbow_forward.mp3" preload="auto"></audio> <!-- Preload audio -->
+    <div class="container">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="warning"></div>
+        <div id="stats">
+            <div>Mistakes: <span id="mistake-count">0</span></div>
+            <div>Current exercise time: <span id="exercise-time">0:00</span></div>
+        </div>
+        <button id="reset">Reset Counter</button>
+        <audio id="audio" src="elbow_forward.mp3" preload="auto"></audio> <!-- Preload audio -->
+    </div>
     
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const warningText = document.getElementById('warning');
-        const audio = document.getElementById('audio'); // Audio element
+        const audio = document.getElementById('audio');
+        const mistakeCountElement = document.getElementById('mistake-count');
+        const exerciseTimeElement = document.getElementById('exercise-time');
+        const resetButton = document.getElementById('reset');
+        
+        // Counter variables
+        let mistakeCount = 0;
+        let isInMistakeState = false;
+        let exerciseStartTime = Date.now();
+        let exerciseTimer;
+        
+        // Start the exercise timer
+        startExerciseTimer();
+        
+        // Reset button event listener
+        resetButton.addEventListener('click', resetCounters);
         
         const pose = new Pose({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
@@ -73,15 +99,27 @@
                 // Display angles
                 ctx.fillStyle = "white";
                 ctx.font = "18px Arial";
-                ctx.fillText(`Left Elbow: ${Math.round(leftElbowAngle)}`, 50, 50);
-                ctx.fillText(`Right Elbow: ${Math.round(rightElbowAngle)}`, 400, 50);
+                ctx.fillText(`Left Elbow: ${Math.round(leftElbowAngle)}°`, 50, 50);
+                ctx.fillText(`Right Elbow: ${Math.round(rightElbowAngle)}°`, 400, 50);
 
-                // Play warning if elbow is too forward
-                if ((leftElbowAngle < 30 || leftElbowAngle > 60 || rightElbowAngle < 30 || rightElbowAngle > 60) && audio.paused) {
+                // Check for mistakes
+                const isMistake = leftElbowAngle < 30 || leftElbowAngle > 60 || rightElbowAngle < 30 || rightElbowAngle > 60;
+                
+                // Only count as a new mistake if transitioning from correct to incorrect form
+                if (isMistake && !isInMistakeState) {
+                    mistakeCount++;
+                    mistakeCountElement.textContent = mistakeCount;
                     warningText.innerText = "Elbow Too Forward!";
-                    audio.play();
-                } else if (leftElbowAngle >= 30 && leftElbowAngle <= 60 && rightElbowAngle >= 30 && rightElbowAngle <= 60) {
+                    
+                    // Play audio if available
+                    if (audio.paused) {
+                        audio.play();
+                    }
+                    
+                    isInMistakeState = true;
+                } else if (!isMistake) {
                     warningText.innerText = "";
+                    isInMistakeState = false;
                 }
             }
         });
@@ -92,6 +130,32 @@
             height: 480
         });
         camera.start();
+        
+        function startExerciseTimer() {
+            exerciseStartTime = Date.now();
+            exerciseTimer = setInterval(updateExerciseTime, 1000);
+        }
+        
+        function updateExerciseTime() {
+            const elapsedTime = Math.floor((Date.now() - exerciseStartTime) / 1000);
+            const minutes = Math.floor(elapsedTime / 60);
+            const seconds = elapsedTime % 60;
+            exerciseTimeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function resetCounters() {
+            // Reset mistake counter
+            mistakeCount = 0;
+            mistakeCountElement.textContent = '0';
+            
+            // Reset exercise timer
+            clearInterval(exerciseTimer);
+            startExerciseTimer();
+            
+            // Reset warning
+            warningText.innerText = "";
+            isInMistakeState = false;
+        }
     </script>
 </body>
 </html>
